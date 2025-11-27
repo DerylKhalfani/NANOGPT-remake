@@ -160,7 +160,6 @@ class CausalSelfAttention(nn.Module):
         # output has the same shape as input: (B, T, C)
         return y
 
-
 class Block(nn.Module):
     def __init__(self, config):
         super().__init__()
@@ -176,7 +175,18 @@ class Block(nn.Module):
         return x
 
 class GPT(nn.Module):
-    pass
+    def __init__(self, config):
+        super().__init__()
+        self.token_embedding = nn.Embedding(config.vocab_size, config.n_embed) # embedding the token
+        self.position_embedding = nn.Embedding(config.block_size, config.n_embed) # positional encoding
+        self.blocks = nn.Sequential(*[Block(config.n_embed, n_head=config.n_head) for _ in range(config.n_layer)]) # how many layers (blocks)?
+
+        # final layernorm
+        self.ln_final = nn.LayerNorm(config.n_embed)
+
+        # language modeling head
+        self.lm_head = nn.Linear(config.n_embed, config.head_size, bias = False)
+
 
 
 
