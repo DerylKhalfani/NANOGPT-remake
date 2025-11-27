@@ -18,6 +18,8 @@ n_layer: 12
 n_head: 12
 n_embd: 768
 
+See the model architecture from gpt-1 paper since the architecture model is the same with gpt 2
+
 """
 
 @dataclass
@@ -35,7 +37,21 @@ class LayerNorm(nn.Module):
     pass
 
 class MLP(nn.Module):
-    pass
+
+    def __init__(self, n_embed, config):
+        super().__init__()
+        self.net = nn.Sequential(
+            # shape input is (B,T, n_embed)
+            nn.Linear(config.n_embed, 4 * config.n_embed, bias = config.bias),
+            nn.GELU(), # gpt 1 uses GeLU
+            nn.Linear(4 * config.n_embed, config.n_embed, bias = config.bias),
+            nn.Dropout(config.dropout)
+        )
+
+    def forward(self, x):
+        x = self.net(x)
+
+        return x
 
 class CausalSelfAttention(nn.Module):
     def __init__(self, config):
