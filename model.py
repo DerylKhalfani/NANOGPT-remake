@@ -11,7 +11,6 @@ Causal Self Attention --> Block
 Multi Layer Perceptron (FF Linear)
 """
 
-
 """
 Original Hyperparams for GPT-2 Small
 n_layer: 12
@@ -19,6 +18,11 @@ n_head: 12
 n_embd: 768
 
 See the model architecture from gpt-1 paper since the architecture model is the same with gpt 2
+
+"""
+
+"""
+What makes this different than nanoGPT
 
 """
 
@@ -33,12 +37,9 @@ class GPTConfig:
     dropout: float = 0.1
     bias:bool = True
 
-class LayerNorm(nn.Module):
-    pass
-
 class MLP(nn.Module):
 
-    def __init__(self, n_embed, config):
+    def __init__(self, config):
         super().__init__()
         self.net = nn.Sequential(
             # shape input is (B,T, n_embed)
@@ -105,7 +106,7 @@ class CausalSelfAttention(nn.Module):
         k = self.key(x)
         v = self.value(x)
 
-        # 2) Reshape q, k, v to separate the heads
+        # reshape q, k, v to separate the heads
         # currently: (B, T, C) where C = n_head * head_size
         # view to:   (B, T, n_head, head_size)
         # transpose to: (B, n_head, T, head_size)
@@ -114,7 +115,7 @@ class CausalSelfAttention(nn.Module):
         v = v.view(B, T, self.n_head, self.head_size).transpose(1, 2)
         # now q, k, v: (B, n_head, T, head_size) because we need to compute the attention scores
 
-        # Compute raw attention scores = Q K^T
+        # compute raw attention scores = Q K^T
         # q: (B, n_head, T, head_size)
         # k.transpose(-2, -1): (B, n_head, head_size, T)
         # result: (B, n_head, T, T)
@@ -136,34 +137,43 @@ class CausalSelfAttention(nn.Module):
         #Dropout on attention weights (regularization)
         att_wei = self.dropout(att_wei)
 
-        # Weighted sum of values
+        # weighted sum of values
         # att_wei: (B, n_head, T, T)
         # v:       (B, n_head, T, head_size)
         # result:  (B, n_head, T, head_size)
         # This is the "Att(Q, K, V) = softmax(QK^T / sqrt(d_k)) V" part
         y = att_wei @ v
 
-        # Merge heads back together Concatenate the head (paper 3.2.2)
+        # merge heads back together Concatenate the head (paper 3.2.2)
         # currently: y is (B, n_head, T, head_size)
         # transpose to (B, T, n_head, head_size)
         # then view to (B, T, C) where C = n_head * head_size
         y = y.transpose(1, 2).contiguous().view(B, T, C)
 
-        # Final linear projection; mixes information across heads
+        # final linear projection; mixes information across heads
         # shape remains (B, T, C)
         y = self.projection(y)
 
-        # Dropout on the output (regularization)
+        # dropout on the output (regularization)
         y = self.dropout(y)
 
         # output has the same shape as input: (B, T, C)
         return y
 
 
-
-
 class Block(nn.Module):
-    pass
+    def __init__(self, config):
+        super().__init__()
+        self.self_attention = CausalSelfAttention(config)
+        self.MLP = MLP(config)
+        self.ln1 = nn.LayerNorm(config.n_embed)
+        self.ln2 = nn.LayerNorm(config.n_embed)
+
+    def forward(self, x):
+        x = x + self.self_attention(self.ln1(x)) # pre layer norm like gpt 1 and residual connection residual connection
+        x = x + self.MLP(self.ln2(x)) # residual connection
+
+        return x
 
 class GPT(nn.Module):
     pass
