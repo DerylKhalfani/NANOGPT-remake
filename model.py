@@ -179,13 +179,64 @@ class GPT(nn.Module):
         super().__init__()
         self.token_embedding = nn.Embedding(config.vocab_size, config.n_embed) # embedding the token
         self.position_embedding = nn.Embedding(config.block_size, config.n_embed) # positional encoding
-        self.blocks = nn.Sequential(*[Block(config.n_embed, n_head=config.n_head) for _ in range(config.n_layer)]) # how many layers (blocks)?
+        self.dropout = nn.Dropout(config.dropout)
+
+        self.blocks = nn.Sequential(*[Block(config) for _ in range(config.n_layer)]) # how many layers (blocks)?
 
         # final layernorm
         self.ln_final = nn.LayerNorm(config.n_embed)
 
         # language modeling head
-        self.lm_head = nn.Linear(config.n_embed, config.head_size, bias = False)
+        self.lm_head = nn.Linear(config.n_embed, config.vocab_size, bias = False)
+
+        # tying weight to help training
+        self.lm_head.weight = self.token_embedding.weight
+
+        # print number of weight
+        print("number of parameters: %.2fM" % (self.get_num_params() / 1e6,))
+
+    def get_num_params(self):
+        # helper to count parameters
+        return sum(p.numel() for p in self.parameters())
+
+    def forward(self, idx, targets=None):
+        '''
+        Purpose:
+        Take token ids as input
+        Run them through the transformer
+        Return logits (and optionally the loss)
+        '''
+
+        B,T = idx.size()
+
+        token_embedding = self.token_embedding(idx) # (B,T,C)
+        position_embedding = self.position_embedding(torch.arange(T, device=idx.device))
+
+        x = token_embedding + position_embedding
+        x = self.dropout(x)
+
+        for block in self.blocks:
+            x = block(x)
+
+        # layer normalization final
+        x = self.ln_final(x)
+
+        if targets is None:
+            logits = self.lm_head(x[:, [-1], :])
+            loss = None
+
+        else:
+            logits = self.lm_head(x)
+            B,T,V = logits.shape
+            loss = F.cross_entropy(
+                logits.view(B*T,V),
+                targets.view(B*T)
+            )
+
+        return logits, loss
+
+    def generate(self):
+        pass
 
 
 
