@@ -3,5 +3,5 @@
   <component name="Black">
     <option name="sdkName" value="PCA25" />
   </component>
-  <component name="ProjectRootManager" version="2" project-jdk-name="PCA25" project-jdk-type="Python SDK" />
+  <component name="ProjectRootManager" version="2" project-jdk-name="/opt/anaconda3/envs/mlops" project-jdk-type="Python SDK" />
 </project>
