@@ -177,6 +177,7 @@ class Block(nn.Module):
 class GPT(nn.Module):
     def __init__(self, config):
         super().__init__()
+        self.config = config
         self.token_embedding = nn.Embedding(config.vocab_size, config.n_embed) # embedding the token
         self.position_embedding = nn.Embedding(config.block_size, config.n_embed) # positional encoding
         self.dropout = nn.Dropout(config.dropout)
@@ -235,8 +236,37 @@ class GPT(nn.Module):
 
         return logits, loss
 
-    def generate(self):
-        pass
+    def generate(self, idx, max_new_tokens, temperature =1.0, top_k=None):
+        '''
+
+        '''
+        for _ in range(max_new_tokens):
+            # crop at block_size
+            idx_cond = idx[:, -self.config.block_size:]
+
+            # forward the model to get the logits for the index in the sequence
+            logits, _ = self(idx_cond)
+
+            # pluck logits at final step and scale bby desired temperature
+            logits = logits[:, -1, :] / temperature
+
+            if top_k is not None:
+                pass
+
+            # apply softmax to convert logits to probabilities to sample token
+            probability = F.softmax(logits, dim=-1)
+
+            # sample from distribution
+            idx_next = torch.multinomial(probability, num_samples=1)
+
+            # append new token to sequence and continue
+            idx = torch.cat((idx, idx_next), dim=1)
+
+        return idx
+
+
+
+
 
 
 
