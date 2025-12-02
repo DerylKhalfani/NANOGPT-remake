@@ -22,13 +22,15 @@ See the model architecture from gpt-1 paper since the architecture model is the 
 """
 
 """
-What makes this different than nanoGPT
+What makes this different than nanoGPT:
+    - Some of the code structure are more similar to Learning GPT from scratch
+    - Smaller model due to compute limitation
 
 """
 
 @dataclass
 class GPTConfig:
-    block_size: int = 512 # context length
+    block_size: int = 1024 # context length
     vocab_size:int = 50304 # GPT2-vocab_size, which is for BytePair Encoding
     n_layer: int = 8 # number of blocks
     n_head: int = 8 # number of attention heads

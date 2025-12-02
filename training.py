@@ -11,11 +11,16 @@ device_type = 'cuda' if 'cuda' in device else 'cpu' # for later use in torch.aut
 
 # -----
 block_size = 1024
+batch_size = 32
+eval_iters = 200
+eval_interval = 2000
 
 warmup_steps = 2000
 max_lr = 2.5e-4
 max_iters = 3
 lr_decay_iters = max_iters # usually same
+
+
 
 # -----
 
@@ -40,6 +45,17 @@ def get_batch(split, batch_size):
     ix = np.random.randint(0, len(data) - block_size, size=(batch_size,))
     x = np.stack([data[i:i + block_size] for i in ix])
     y = np.stack([data[i + 1:i + 1 + block_size] for i in ix])
+
+    # convert to torch tensors and proper dtype
+    x = torch.from_numpy(x.astype(np.int64))  # or np.longlong
+    y = torch.from_numpy(y.astype(np.int64))
+
+    if device_type == 'cuda':
+        # pin arrays x,y, which allows us to move them to GPU asynchronously (non_blocking=True)
+        x, y = x.pin_memory().to(device, non_blocking=True), y.pin_memory().to(device, non_blocking=True)
+    else:
+        x, y = x.to(device), y.to(device)
+
     return x, y
 
 def lr_lambda(current_step):
@@ -56,6 +72,23 @@ def lr_lambda(current_step):
     coeff = 0.5 * (1.0 + math.cos(math.pi * decay_ratio))
     return coeff
 
+# loss function
+@torch.no_grad()
+def estimate_loss():
+    model.eval()
+    out = {}
+    for split in ['train', 'val']:
+        losses = []
+        for _ in range(eval_iters):
+            x, y = get_batch(split, batch_size)
+            logits, loss = model(x, y)
+            losses.append(loss.item())
+        out[split] = sum(losses) / len(losses)
+    model.train()
+    return out
+
+
+print('INITIALIZING MODEL')
 # initial config
 model_init = GPTConfig()
 
@@ -66,5 +99,31 @@ model.to(device)
 
 # intiialize optimizer
 optimizer = torch.optim.AdamW(model.parameters(), lr=2.5e-4, betas = (0.9, 0.95))
+scheduler = LambdaLR(optimizer, lr_lambda=lr_lambda)
 
-print(model_init)
+# training loop
+iter_num = 0
+
+print('TRAINING STARTED')
+while iter_num < max_iters:
+    if iter_num % eval_interval == 0:
+        loss = estimate_loss()
+        print(f"step: {iter_num}, loss train: {loss['train']:.4f}, loss val: {loss['val']:.4f}")
+
+    # sample batch
+    x, y = get_batch("train", batch_size)
+
+    # forward
+    logits, loss = model(x, y)
+
+    optimizer.zero_grad()
+    loss.backward()
+    torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
+    optimizer.step()
+    scheduler.step()
+
+    iter_num += 1
+
+# optionally save
+torch.save(model.state_dict(), "model_final.pt")
+print("TRAINING DONE.")
