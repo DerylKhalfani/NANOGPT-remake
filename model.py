@@ -253,7 +253,9 @@ class GPT(nn.Module):
             logits = logits[:, -1, :] / temperature
 
             if top_k is not None:
-                pass
+                # keep only top_k logits, set the rest to -inf so probability ~ 0
+                v, _ = torch.topk(logits, top_k)
+                logits[logits < v[:, [-1]]] = float('-inf')
 
             # apply softmax to convert logits to probabilities to sample token
             probability = F.softmax(logits, dim=-1)
@@ -265,7 +267,6 @@ class GPT(nn.Module):
             idx = torch.cat((idx, idx_next), dim=1)
 
         return idx
-
 
 
 
